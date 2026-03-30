@@ -2,13 +2,14 @@
 import dlt
 import requests
 import json
+import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from pyspark.sql.functions import current_timestamp, lit
 
 # Variable decalration
 BASE_URL = "https://api.ember-energy.org/v1"
-EMBER_ENERGY_API_KEY = spark.conf.get("ember_api_key")
+EMBER_ENERGY_API_KEY = dbutils.secrets.get("tokariev-scope", "ember-api-key")
 END_DATE = datetime.now().strftime("%Y-%m")
 START_DATE = (datetime.now() - relativedelta(months=12)).strftime("%Y-01")
 START_YEAR = datetime.now().year - 1
@@ -29,9 +30,8 @@ def fetch_ember(path: str):
     response.raise_for_status()
 
     data = response.json().get("data")
-    json_strings = [json.dumps(record) for record in data]
-    rdd = spark.sparkContext.parallelize(json_strings)
-    df = spark.read.json(rdd)
+    pdf = pd.DataFrame(data)
+    df = spark.createDataFrame(pdf)
 
     return df.withColumn("_ingested_at", current_timestamp()) \
              .withColumn("_source", lit(path))
@@ -97,8 +97,6 @@ def bronze_electricity_demand_monthly():
 )
 def bronze_electricity_demand_yearly():
     return fetch_ember("electricity-demand/yearly")
-
-
 
 
 
