@@ -1,0 +1,39 @@
+resources:
+  jobs:
+    energy_etl_job:
+      name: ${bundle.target}_energy_full_etl
+
+      tasks:
+        - task_key: run_worldbank_ingest
+          job_cluster_key: job_cluster
+          spark_python_task:
+            python_file: ../src/producers/worldbank_zerobus_producer.py
+          libraries:
+            - pypi:
+                package: databricks-zerobus-ingest-sdk
+
+        - task_key: run_bronze_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.energy_bronze_pipeline.id}
+
+        - task_key: run_worldbank_bronze
+          depends_on:
+            - task_key: run_worldbank_ingest
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.worldbank_bronze_pipeline.id}
+
+        - task_key: run_silver_pipeline
+          depends_on:
+            - task_key: run_bronze_pipeline
+            - task_key: run_worldbank_bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.energy_silver_pipeline.id}
+
+      job_clusters:
+        - job_cluster_key: job_cluster
+          new_cluster:
+            spark_version: 14.3.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            autoscale:
+              min_workers: 1
+              max_workers: 2
