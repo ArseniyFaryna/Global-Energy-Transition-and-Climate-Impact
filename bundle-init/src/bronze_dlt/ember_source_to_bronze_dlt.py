@@ -11,8 +11,8 @@ from pyspark.sql.functions import current_timestamp, lit
 BASE_URL = "https://api.ember-energy.org/v1"
 EMBER_ENERGY_API_KEY = dbutils.secrets.get("tokariev-scope", "ember-api-key")
 END_DATE = datetime.now().strftime("%Y-%m")
-START_DATE = (datetime.now() - relativedelta(months=12)).strftime("%Y-01")
-START_YEAR = datetime.now().year - 1
+START_DATE = "2015-01"
+START_YEAR = "2015"
 
 # Fetch function
 def fetch_ember(path: str):
