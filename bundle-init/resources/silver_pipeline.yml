@@ -1,0 +1,12 @@
+resources:
+  pipelines:
+    energy_silver_pipeline:
+      name: ${bundle.target}_energy_silver
+      libraries:
+        - file:
+            path: ../src/silver_dlt/from_bronze_to_silver.py
+      catalog: energy_trans_dev
+      schema: silver
+      serverless: true
+      photon: true
+      development: true

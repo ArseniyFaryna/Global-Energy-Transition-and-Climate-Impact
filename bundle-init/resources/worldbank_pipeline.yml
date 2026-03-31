@@ -1,0 +1,15 @@
+resources:
+  pipelines:
+    worldbank_bronze_pipeline:
+      name: ${bundle.target}_worldbank_bronze_pipeline
+      catalog: energy_trans_dev   
+      schema: bronze              
+      development: true
+      libraries:
+        - notebook:
+            path: ../src/bronze_dlt/worldbank_source_to_bronze.py
+      clusters:
+        - label: default
+          autoscale:
+            min_workers: 1
+            max_workers: 2
