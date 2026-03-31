@@ -5,12 +5,9 @@ resources:
 
       tasks:
         - task_key: run_worldbank_ingest
-          job_cluster_key: job_cluster
           spark_python_task:
             python_file: ../src/producers/worldbank_zerobus_producer.py
-          libraries:
-            - pypi:
-                package: databricks-zerobus-ingest-sdk
+          environment_key: default
 
         - task_key: run_bronze_pipeline
           pipeline_task:
@@ -29,11 +26,15 @@ resources:
           pipeline_task:
             pipeline_id: ${resources.pipelines.energy_silver_pipeline.id}
 
-      job_clusters:
-        - job_cluster_key: job_cluster
-          new_cluster:
-            spark_version: 14.3.x-scala2.12
-            node_type_id: Standard_DS3_v2
-            autoscale:
-              min_workers: 1
-              max_workers: 2
+        - task_key: run_gold_pipeline
+          depends_on:
+            - task_key: run_silver_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.energy_gold_pipeline.id}
+
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+            dependencies:
+              - databricks-zerobus-ingest-sdk
