@@ -1,18 +1,17 @@
 resources:
   pipelines:
-    energy_bronze_pipeline:
-      name: ${bundle.target}_energy_bronze
+    energy_gold_pipeline:
+      name: ${bundle.target}_energy_gold
       libraries:
         - file:
-            path: ../src/bronze_dlt/ember_source_to_bronze_dlt.py
+            path: ../src/gold_dlt/energy_wb_gold_dlt.py
       
       configuration:
         spark.ember_api_key: "{{secrets/tokariev-scope/ember-api-key}}"
       
       catalog: energy_trans_dev
-      schema: bronze
+      schema: gold
       clusters:
         - label: default
           node_type_id: Standard_F4
           num_workers: 1
-
