@@ -1,6 +1,11 @@
+%pip install isocodes
 from pyspark import pipelines as dp
 from pyspark.sql.functions import col, to_date
 from pyspark.sql.functions import when
+from isocodes import countries
+# Country helper df
+country_data = [(c.alpha_2, c.alpha_3) for c in pycountry.countries]
+lookup_df = spark.createDataFrame(country_data, ["alpha_2", "alpha_3"])
 
 @dp.materialized_view(
     name="silver_ember_country_yearly",
@@ -153,7 +158,9 @@ def silver_ember_capacity():
 @dp.expect("valid_value", "value IS NOT NULL")
 def silver_worldbank():
     return (
-        spark.read.table("energy_trans_dev.bronze.bronze_worldbank_raw")
+        spark.read.table("energy_trans_dev.bronze.bronze_worldbank_raw").join(lookup_df, df.country_code == lookup_df.alpha_2, "left") \
+        .withColumn("country_code", F.col("alpha_3")) \
+        .drop("alpha_3")
         .select(
             col("country").alias("country_name"),
             col("country_code"),
