@@ -1,11 +1,21 @@
+# COMMAND ----------
+
 %pip install isocodes
+
+# COMMAND ----------
+
 from pyspark import pipelines as dp
 from pyspark.sql.functions import col, to_date
 from pyspark.sql.functions import when
 from isocodes import countries
 # Country helper df
-country_data = [(c.alpha_2, c.alpha_3) for c in pycountry.countries]
-lookup_df = spark.createDataFrame(country_data, ["alpha_2", "alpha_3"])
+
+country_list = [
+    {"alpha_2": c["alpha_2"], "alpha_3": c["alpha_3"]}
+    for c in countries.items
+    if "alpha_2" in c and "alpha_3" in c
+]
+lookup_df = spark.createDataFrame(country_list)
 
 @dp.materialized_view(
     name="silver_ember_country_yearly",
@@ -157,10 +167,11 @@ def silver_ember_capacity():
 @dp.expect("valid_country", "country_name IS NOT NULL")
 @dp.expect("valid_value", "value IS NOT NULL")
 def silver_worldbank():
+    wb = spark.read.table("energy_trans_dev.bronze.bronze_worldbank_raw")
     return (
-        spark.read.table("energy_trans_dev.bronze.bronze_worldbank_raw").join(lookup_df, df.country_code == lookup_df.alpha_2, "left") \
-        .withColumn("country_code", F.col("alpha_3")) \
-        .drop("alpha_3")
+        wb.join(lookup_df, wb.country_code == lookup_df.alpha_2, "left")
+        .withColumn("country_code", col("alpha_3"))
+        .drop("alpha_2", "alpha_3")
         .select(
             col("country").alias("country_name"),
             col("country_code"),
