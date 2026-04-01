@@ -36,7 +36,7 @@ def gold_access_gap():
     renewable_df = energy_df.filter(energy_df.energy_category == "renewables")
 
     wb_df = spark.read.table("energy_trans_dev.silver.silver_worldbank")
-    el_access_df = wb_df.filter(wb_df.indicator == "elec_access_pct")
+    el_access_df = wb_df.filter(wb_df.indicator == "electricity_access")
 
     access_energy_df = renewable_df.alias("r").join(el_access_df.alias("el"), on=['country_name', 'year'], how="inner")\
         .select("r.country_name", "r.country_code", "el.year", "el.value", "r.share_of_generation_pct")
