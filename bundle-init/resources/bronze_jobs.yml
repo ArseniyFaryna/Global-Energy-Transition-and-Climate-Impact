@@ -15,4 +15,3 @@ resources:
         - label: default
           node_type_id: Standard_F4
           num_workers: 1
-
