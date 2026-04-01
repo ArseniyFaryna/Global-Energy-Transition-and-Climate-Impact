@@ -89,7 +89,7 @@ def gold_coal_decline_rate():
     coal_generation_df = spark.read.table("energy_trans_dev.silver.silver_ember_generation")\
         .filter(F.col("energy_source") == "Coal")\
         .withColumn("year", F.col("year").cast("int"))\
-        .select("country_code", "year", "share_of_generation_pct")
+        .select("country_code", "country_name", "year", "share_of_generation_pct")
 
     window_spec = Window.partitionBy("country_code").orderBy("year")
     coal_transition_df = coal_generation_df.withColumn(
