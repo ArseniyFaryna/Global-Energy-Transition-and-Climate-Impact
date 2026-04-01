@@ -1,0 +1,64 @@
+# .github/workflows/deploy-databricks.yml
+# CI/CD for Energy Transition project using Databricks Asset Bundles
+# Uses existing Service Principal (sp-databricks-adls) for authentication
+#
+# Required GitHub Secrets (values from Key Vault kvdbdev):
+#   ARM_CLIENT_ID      - sp-databricks-adls-appId
+#   ARM_CLIENT_SECRET  - sp-databricks-adls-appkey
+#   ARM_TENANT_ID      - tenant
+#   DATABRICKS_HOST    - https://<your-workspace>.azuredatabricks.net
+
+name: Databricks CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+jobs:
+  validate:
+    name: Validate Bundle
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Validate bundle (dev)
+        run: databricks bundle validate -t dev
+        working-directory: ./bundle-init
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Validate bundle
+        run: databricks bundle validate -t dev
+        working-directory: ./bundle-init
+
+      - name: Deploy bundle to dev
+        run: databricks bundle deploy -t dev
+        working-directory: ./bundle-init
+
+      - name: Run full ETL pipeline
+        run: databricks bundle run dev_energy_full_etl -t dev --refresh-all
+        working-directory: ./bundle-init

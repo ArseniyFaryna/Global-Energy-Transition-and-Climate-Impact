@@ -5,13 +5,11 @@ resources:
       libraries:
         - file:
             path: ../src/gold_dlt/energy_wb_gold_dlt.py
-      
-      configuration:
-        spark.ember_api_key: "{{secrets/tokariev-scope/ember-api-key}}"
-      
       catalog: energy_trans_dev
       schema: gold
+      development: true
+      photon: false
       clusters:
         - label: default
-          node_type_id: Standard_F4
+          node_type_id: Standard_F4s_v2
           num_workers: 1

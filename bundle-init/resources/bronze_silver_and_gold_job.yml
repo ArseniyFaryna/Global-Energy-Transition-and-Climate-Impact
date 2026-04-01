@@ -29,11 +29,15 @@ resources:
           pipeline_task:
             pipeline_id: ${resources.pipelines.energy_silver_pipeline.id}
 
+        - task_key: run_gold_pipeline
+          depends_on:
+            - task_key: run_silver_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.energy_gold_pipeline.id}
+
       job_clusters:
         - job_cluster_key: job_cluster
           new_cluster:
             spark_version: 14.3.x-scala2.12
-            node_type_id: Standard_DS3_v2
-            autoscale:
-              min_workers: 1
-              max_workers: 2
+            node_type_id: Standard_F4
+            num_workers: 1
