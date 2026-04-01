@@ -11,6 +11,7 @@ resources:
       
       catalog: energy_trans_dev
       schema: bronze
+      development: false
       clusters:
         - label: default
           node_type_id: Standard_F4

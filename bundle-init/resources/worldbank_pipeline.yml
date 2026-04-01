@@ -4,7 +4,7 @@ resources:
       name: ${bundle.target}_worldbank_bronze_pipeline
       catalog: energy_trans_dev   
       schema: bronze              
-      development: true
+      development: false
       libraries:
         - notebook:
             path: ../src/bronze_dlt/worldbank_source_to_bronze.py
