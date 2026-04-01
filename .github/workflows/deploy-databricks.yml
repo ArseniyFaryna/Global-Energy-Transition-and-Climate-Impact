@@ -5,7 +5,6 @@
 # Required GitHub Secrets (values from Key Vault kvdbdev):
 #   ARM_CLIENT_ID      - sp-databricks-adls-appId
 #   ARM_CLIENT_SECRET  - sp-databricks-adls-appkey
-#   ARM_TENANT_ID      - tenant
 #   DATABRICKS_HOST    - https://<your-workspace>.azuredatabricks.net
 
 name: Databricks CI/CD
@@ -18,9 +17,8 @@ on:
 
 env:
   DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  DATABRICKS_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  DATABRICKS_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
 
 jobs:
   validate:
