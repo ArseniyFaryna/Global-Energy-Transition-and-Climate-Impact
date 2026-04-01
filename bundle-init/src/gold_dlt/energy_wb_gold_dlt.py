@@ -1,6 +1,6 @@
 import pyspark.sql.functions as F
-from pyspark.sql.window import Window
 from pyspark import pipelines as dp
+from pyspark.sql.window import Window
 
 # Energy vs wealth 
 @dp.table(
@@ -13,14 +13,17 @@ def gold_wealth_energy_yearly():
     # Plot gdp agains co2 intensity and color by renewables %
     gdp_df = spark.read.table("energy_trans_dev.silver.silver_worldbank")
     gdp_df = gdp_df.filter(gdp_df.indicator == "gdp_per_capita")\
-        .drop("country_name")
+        .drop("country_code")
 
     energy_df = spark.read.table("energy_trans_dev.silver.silver_ember_generation")
     renewable_df = energy_df.filter(energy_df.energy_category == "renewables")
 
-    wealth_energy_df = renewable_df.alias("r").join(gdp_df.alias("g"), on=['country_code', 'year'], how="inner")
+    co2_df = spark.read.table("energy_trans_dev.silver.silver_ember_country_yearly").select("country_name", "country_code", "co2_intensity_gco2_per_kwh", "year")
+    wealth_energy_df = renewable_df.alias("r").join(gdp_df.alias("g"), on=['country_name', 'year'], how="inner")
 
-    return wealth_energy_df
+    wealth_vs_co2_intensity = wealth_energy_df.alias("w").join(co2_df.alias("c"), on=["country_code", "year"], how="inner")\
+        .select("w.country_name", "w.country_code", "w.year", "w.value", "c.co2_intensity_gco2_per_kwh", "w.share_of_generation_pct")
+    return wealth_vs_co2_intensity
 
 @dp.table(
     name="gold_access_gap"
@@ -35,11 +38,10 @@ def gold_access_gap():
     wb_df = spark.read.table("energy_trans_dev.silver.silver_worldbank")
     el_access_df = wb_df.filter(wb_df.indicator == "elec_access_pct")
 
-    access_energy_df = renewable_df.alias("r").join(el_access_df.alias("el"), on=['country_code', 'year'], how="inner")\
+    access_energy_df = renewable_df.alias("r").join(el_access_df.alias("el"), on=['country_name', 'year'], how="inner")\
         .select("r.country_name", "r.country_code", "el.year", "el.value", "r.share_of_generation_pct")
 
     return access_energy_df
-
 
 @dp.table(
     name="gold_energy_generation_share"
@@ -48,11 +50,9 @@ def gold_energy_generation_share():
     # Energy generation: fuel_type, share_pct
     # Plot share of renewables by fuel type on choropleth map
     energy_df = spark.read.table("energy_trans_dev.silver.silver_ember_generation_monthly")\
-        .withColumn("renewable_pct", F.when(F.col("energy_category") == "renewables", F.col("share_of_generation_pct")).otherwise(0))\
-        .select("country_name", "country_code", "date", "energy_source", "energy_category", "share_of_generation_pct", "renewable_pct")
+        .select("country_name", "country_code", "date", "energy_source", "energy_category", "share_of_generation_pct")
 
     return energy_df
-
 
 @dp.table(
     name="gold_capacity_per_capita"
@@ -63,17 +63,16 @@ def gold_capacity_per_capita():
     # Plot capacity per capita on choropleth map
     capacity_df = spark.read.table("energy_trans_dev.silver.silver_ember_capacity")\
         .withColumn("year", F.year(F.col("date")))\
-        .groupBy("country_code", "year").agg(F.sum("capacity_gw").alias("capacity_gw"))
+        .groupBy("country_name", "country_code", "year").agg(F.sum("capacity_gw").alias("capacity_gw"))
 
     wb_df = spark.read.table("energy_trans_dev.silver.silver_worldbank")
     pop_df = wb_df.filter(wb_df.indicator == "population")
 
-    capacity_pop_df = capacity_df.alias("c").join(pop_df.alias("p"), on=["country_code", "year"], how="inner")\
+    capacity_pop_df = capacity_df.alias("c").join(pop_df.alias("p"), on=["country_name", "year"], how="inner")\
         .withColumn("capacity_per_capita", F.col("capacity_gw")/F.col("value"))\
-        .select("p.country_name", "c.country_code", "c.year", "c.capacity_gw", "p.value", "capacity_per_capita")
+        .select("c.country_name", "c.country_code", "c.year", "c.capacity_gw", "p.value", "capacity_per_capita")
 
     return capacity_pop_df
-
 
 @dp.table(
     name="gold_coal_decline_rate"
@@ -91,35 +90,32 @@ def gold_coal_decline_rate():
     ).withColumn(
         "coal_yoy_delta", F.col("share_of_generation_pct") - F.col("prev_share_pct")
     )
-    return coal_transition_df
-    
-@dp.table(
-    name="gold_growth_transition"
-)
-def gold_growth_transition():
-    # gdp_growth_pct renewable_share_pct renewable_yoy_delta
-    wb_df = spark.read.table("energy_trans_dev.silver.silver_worldbank")
-    gdp_df = wb_df.filter(wb_df.indicator == "gdp_per_capita")\
-        .select("country_name", "country_code", "year", "value")
 
-    window_spec = Window.partitionBy("country_code").orderBy("year")
+    return coal_transition_df
+
+@dp.table(name="gold_growth_transition")
+def gold_growth_transition():
+    wb_df = spark.read.table("energy_trans_dev.silver.silver_worldbank")
+    gdp_df = wb_df.filter(wb_df.indicator == "gdp_per_capita") \
+        .select("country_name", "year", "value")
+
+    window_spec = Window.partitionBy("country_name").orderBy("year")
+    
     gdp_growth_df = gdp_df.withColumn(
         "prev_gdp", F.lag("value").over(window_spec)
     ).withColumn(
         "gdp_growth_pct", ((F.col("value") - F.col("prev_gdp")) / F.col("prev_gdp")) * 100
     )
 
-    energy_df = spark.read.table("energy_trans_dev.silver.silver_ember_generation")\
-        .filter(F.col("energy_category") == "renewables")\
-        .select("country_code", "year", "share_of_generation_pct")
+    energy_df = spark.read.table("energy_trans_dev.silver.silver_ember_generation") \
+        .filter(F.col("energy_category") == "renewables") \
+        .select("country_name", "year", "share_of_generation_pct")
 
     renewable_growth_df = energy_df.withColumn(
         "prev_share", F.lag("share_of_generation_pct").over(window_spec)
     ).withColumn(
         "renewable_yoy_delta", F.col("share_of_generation_pct") - F.col("prev_share")
     )
-
-    result_df = gdp_growth_df.alias("g").join(renewable_growth_df.alias("r"), on=["country_code", "year"], how="inner")\
-        .select("g.country_name", "g.country_code", "g.year", "g.gdp_growth_pct", "r.share_of_generation_pct", "r.renewable_yoy_delta")
-
-    return result_df
+    renewable_growth_df = renewable_growth_df.select("country_name", "year", "renewable_yoy_delta", "share_of_generation_pct")
+        
+    return gdp_growth_df.join(renewable_growth_df, on=["country_name", "year"], how="inner").fillna(0)
