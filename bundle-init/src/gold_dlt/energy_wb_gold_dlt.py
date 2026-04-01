@@ -52,7 +52,14 @@ def gold_energy_generation_share():
     energy_df = spark.read.table("energy_trans_dev.silver.silver_ember_generation_monthly")\
         .select("country_name", "country_code", "date", "energy_source", "energy_category", "share_of_generation_pct")
 
-    return energy_df
+    pivot_df = energy_df.groupBy("country_name", "country_code", "date") \
+    .pivot("energy_source", [
+        "Bioenergy", "Coal", "Gas", "Hydro", "Net imports", 
+        "Nuclear", "Other fossil", "Other renewables", "Solar", "Wind"
+    ]) \
+    .agg(F.avg("share_of_generation_pct"))
+
+    return pivot_df
 
 @dp.table(
     name="gold_capacity_per_capita"
