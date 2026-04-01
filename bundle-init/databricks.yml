@@ -12,10 +12,10 @@ targets:
     default: true
     workspace:
       host: https://adb-7405605185991044.4.azuredatabricks.net
-      root_path: /Shared/energy-project/$$   {bundle.name}/   $${workspace.current_user.short_name}/${bundle.target}
+      root_path: /Shared/energy-project/${bundle.name}/${workspace.current_user.short_name}/${bundle.target}
 
   prod:
     mode: production
     workspace:
       host: https://adb-7405605185991044.4.azuredatabricks.net
-      root_path: /Shared/energy-project/.bundle/$$   {bundle.name}/   $${bundle.target}
+      root_path: /Shared/energy-project/.bundle/${bundle.name}/${bundle.target}
