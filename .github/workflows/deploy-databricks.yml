@@ -2,11 +2,11 @@
 # CI/CD for Energy Transition project using Databricks Asset Bundles
 # Uses existing Service Principal (sp-databricks-adls) for authentication
 #
-# Required GitHub Secrets (values from Key Vault kvdbdev):
-#   ARM_CLIENT_ID      - sp-databricks-adls-appId
-#   ARM_CLIENT_SECRET  - sp-databricks-adls-appkey
-#   ARM_TENANT_ID      - tenant
-#   DATABRICKS_HOST    - https://<your-workspace>.azuredatabricks.net
+# Required GitHub Secrets:
+#   DATABRICKS_HOST          - https://<your-workspace>.azuredatabricks.net
+#   DATABRICKS_CLIENT_ID     - Service Principal App ID
+#   DATABRICKS_CLIENT_SECRET - Service Principal Secret
+#   ARM_TENANT_ID            - Azure Tenant ID
 
 name: Databricks CI/CD
 
@@ -18,9 +18,7 @@ on:
 
 env:
   DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
 
 jobs:
   validate:
