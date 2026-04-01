@@ -1,12 +1,10 @@
 # .github/workflows/deploy-databricks.yml
 # CI/CD for Energy Transition project using Databricks Asset Bundles
-# Uses existing Service Principal (sp-databricks-adls) for authentication
+# Production-only deployment pipeline
 #
 # Required GitHub Secrets:
 #   DATABRICKS_HOST          - https://<your-workspace>.azuredatabricks.net
-#   DATABRICKS_CLIENT_ID     - Service Principal App ID
-#   DATABRICKS_CLIENT_SECRET - Service Principal Secret
-#   ARM_TENANT_ID            - Azure Tenant ID
+#   DATABRICKS_TOKEN         - Databricks Personal Access Token
 
 name: Databricks CI/CD
 
@@ -15,6 +13,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+  workflow_dispatch:
 
 env:
   DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
@@ -22,7 +21,7 @@ env:
 
 jobs:
   validate:
-    name: Validate Bundle
+    name: Validate Bundle (prod)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
 
@@ -33,14 +32,14 @@ jobs:
       - name: Setup Databricks CLI
         uses: databricks/setup-cli@main
 
-      - name: Validate bundle (dev)
-        run: databricks bundle validate -t dev
+      - name: Validate bundle (prod)
+        run: databricks bundle validate -t prod
         working-directory: ./bundle-init
 
-  deploy-dev:
-    name: Deploy to Dev
+  deploy-prod:
+    name: Deploy to Production
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repo
@@ -49,14 +48,10 @@ jobs:
       - name: Setup Databricks CLI
         uses: databricks/setup-cli@main
 
-      - name: Validate bundle
-        run: databricks bundle validate -t dev
+      - name: Validate bundle (prod)
+        run: databricks bundle validate -t prod
         working-directory: ./bundle-init
 
-      - name: Deploy bundle to dev
-        run: databricks bundle deploy -t dev
-        working-directory: ./bundle-init
-
-      - name: Run full ETL pipeline
-        run: databricks bundle run dev_energy_full_etl -t dev --refresh-all
+      - name: Deploy bundle to prod
+        run: databricks bundle deploy -t prod
         working-directory: ./bundle-init

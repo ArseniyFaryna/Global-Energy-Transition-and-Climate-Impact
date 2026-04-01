@@ -7,7 +7,7 @@ resources:
             path: ../src/silver_dlt/from_bronze_to_silver.py
       catalog: energy_trans_dev
       schema: silver
-      development: true
+      development: false
       photon: false
       clusters:
         - label: default

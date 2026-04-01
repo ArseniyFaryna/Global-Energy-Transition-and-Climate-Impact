@@ -7,7 +7,7 @@ resources:
             path: ../src/gold_dlt/energy_wb_gold_dlt.py
       catalog: energy_trans_dev
       schema: gold
-      development: true
+      development: false
       photon: false
       clusters:
         - label: default
