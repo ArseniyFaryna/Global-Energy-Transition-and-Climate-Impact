@@ -1,0 +1,1164 @@
+{
+  "datasets": [
+    {
+      "columns": [
+        {
+          "description": "Sum of all renewable energy source shares",
+          "displayName": "Renewables Total %",
+          "expression": "SUM(COALESCE(CAST(`Bioenergy` AS DOUBLE), CAST(0 AS DOUBLE)) + COALESCE(CAST(`Hydro` AS DOUBLE), CAST(0 AS DOUBLE)) + COALESCE(CAST(`Other renewables` AS DOUBLE), CAST(0 AS DOUBLE)) + COALESCE(CAST(`Solar` AS DOUBLE), CAST(0 AS DOUBLE)) + COALESCE(CAST(`Wind` AS DOUBLE), CAST(0 AS DOUBLE)))"
+        }
+      ],
+      "displayName": "Energy Generation Share by Country",
+      "name": "482f1056",
+      "queryLines": [
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      country_name,\n",
+        "      country_code,\n",
+        "      energy_source,\n",
+        "      share_of_generation_pct, \n",
+        "      date\n",
+        "    FROM\n",
+        "      energy_trans_dev.gold.gold_energy_generation_share\n",
+        "  )\n",
+        "    PIVOT (\n",
+        "      AVG(share_of_generation_pct) FOR energy_source IN (\n",
+        "        'Bioenergy',\n",
+        "        'Coal',\n",
+        "        'Gas',\n",
+        "        'Hydro',\n",
+        "        'Net imports',\n",
+        "        'Nuclear',\n",
+        "        'Other fossil',\n",
+        "        'Other renewables',\n",
+        "        'Solar',\n",
+        "        'Wind'\n",
+        "      )\n",
+        "    )"
+      ]
+    },
+    {
+      "catalog": "energy_trans_dev",
+      "displayName": "Global Trends in Country Level Carbon Intensity",
+      "name": "fcb33aee",
+      "queryLines": [
+        "-- Which countries have the highest CO2 intensity trends?\n",
+        "WITH country_years AS (\n",
+        "  SELECT\n",
+        "    `country_name`,\n",
+        "    `country_code`,\n",
+        "    `year`,\n",
+        "    `co2_intensity_gco2_per_kwh`\n",
+        "  FROM `energy_trans_dev`.`gold`.`gold_energy_profile`\n",
+        "  WHERE `co2_intensity_gco2_per_kwh` IS NOT NULL\n",
+        "),\n",
+        "bounds AS (\n",
+        "  SELECT\n",
+        "    `country_name`,\n",
+        "    `country_code`,\n",
+        "    MIN(`year`) AS first_year,\n",
+        "    MAX(`year`) AS last_year\n",
+        "  FROM country_years\n",
+        "  GROUP BY `country_name`, `country_code`\n",
+        "),\n",
+        "trend AS (\n",
+        "  SELECT\n",
+        "    b.`country_name`,\n",
+        "    b.`country_code`,\n",
+        "    b.first_year,\n",
+        "    b.last_year,\n",
+        "    FIRST_VALUE(c.`co2_intensity_gco2_per_kwh`) \n",
+        "      OVER (PARTITION BY b.`country_name`, b.`country_code` ORDER BY c.`year` ASC \n",
+        "            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS first_intensity,\n",
+        "    FIRST_VALUE(c.`co2_intensity_gco2_per_kwh`) \n",
+        "      OVER (PARTITION BY b.`country_name`, b.`country_code` ORDER BY c.`year` DESC \n",
+        "            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS last_intensity\n",
+        "  FROM bounds b\n",
+        "  JOIN country_years c\n",
+        "    ON b.`country_name` = c.`country_name`\n",
+        "   AND b.`country_code` = c.`country_code`\n",
+        "),\n",
+        "country_trend AS (\n",
+        "  SELECT DISTINCT\n",
+        "    `country_name`,\n",
+        "    `country_code`,\n",
+        "    first_year,\n",
+        "    last_year,\n",
+        "    first_intensity,\n",
+        "    last_intensity,\n",
+        "    last_intensity - first_intensity AS abs_change_intensity,\n",
+        "    CASE \n",
+        "      WHEN first_intensity = 0 THEN NULL\n",
+        "      ELSE (last_intensity - first_intensity) / first_intensity * 100.0\n",
+        "    END AS pct_change_intensity\n",
+        "  FROM trend\n",
+        ")\n",
+        "SELECT\n",
+        "  `country_name`,\n",
+        "  `country_code`,\n",
+        "  first_year,\n",
+        "  last_year,\n",
+        "  first_intensity AS initial_co2_intensity_gco2_per_kwh,\n",
+        "  last_intensity AS latest_co2_intensity_gco2_per_kwh,\n",
+        "  abs_change_intensity AS change_gco2_per_kwh,\n",
+        "  pct_change_intensity AS pct_change_gco2_per_kwh\n",
+        "FROM country_trend\n",
+        "ORDER BY latest_co2_intensity_gco2_per_kwh DESC, pct_change_intensity DESC\n",
+        "LIMIT 20;"
+      ],
+      "schema": "gold"
+    },
+    {
+      "displayName": "Global Average CO₂ Intensity Over Time",
+      "name": "global_avg_co2",
+      "queryLines": [
+        "SELECT\n",
+        "  `year`,\n",
+        "  `co2_intensity_gco2_per_kwh`\n",
+        "FROM\n",
+        "  `energy_trans_dev`.`gold`.`gold_energy_profile`\n",
+        "WHERE\n",
+        "  `co2_intensity_gco2_per_kwh` IS NOT NULL"
+      ]
+    },
+    {
+      "displayName": "Renewable Energy Share Impact on Economic Growth Trends",
+      "name": "fc2d4794",
+      "queryLines": [
+        "-- How does GDP growth differ by renewable share_of_generation_pct levels?\n",
+        "SELECT\n",
+        "  CASE\n",
+        "    WHEN `share_of_generation_pct` < 20 THEN '0-20%'\n",
+        "    WHEN `share_of_generation_pct` < 40 THEN '20-40%'\n",
+        "    WHEN `share_of_generation_pct` < 60 THEN '40-60%'\n",
+        "    WHEN `share_of_generation_pct` < 80 THEN '60-80%'\n",
+        "    ELSE '80-100%'\n",
+        "  END AS `renewable_share_bucket`,\n",
+        "  COUNT(*) AS `num_country_years`,\n",
+        "  AVG(`share_of_generation_pct`) AS `avg_share_of_generation_pct`,\n",
+        "  AVG(`gdp_growth_pct`) AS `avg_gdp_growth_pct`\n",
+        "FROM `energy_trans_dev`.`gold`.`gold_growth_transition`\n",
+        "WHERE `share_of_generation_pct` IS NOT NULL\n",
+        "  AND `gdp_growth_pct` IS NOT NULL\n",
+        "GROUP BY\n",
+        "  CASE\n",
+        "    WHEN `share_of_generation_pct` < 20 THEN '0-20%'\n",
+        "    WHEN `share_of_generation_pct` < 40 THEN '20-40%'\n",
+        "    WHEN `share_of_generation_pct` < 60 THEN '40-60%'\n",
+        "    WHEN `share_of_generation_pct` < 80 THEN '60-80%'\n",
+        "    ELSE '80-100%'\n",
+        "  END\n",
+        "ORDER BY `renewable_share_bucket`;"
+      ]
+    },
+    {
+      "displayName": "Energy Access Disparity Overview Dataset",
+      "name": "4c02f2de",
+      "queryLines": [
+        "select * from energy_trans_dev.gold.gold_access_gap"
+      ]
+    },
+    {
+      "displayName": "Clean Energy Transition Leaders",
+      "name": "clean_energy_transition",
+      "queryLines": [
+        "WITH monthly_renewable AS (\n",
+        "  SELECT\n",
+        "    `country_name`,\n",
+        "    `country_code`,\n",
+        "    `date`,\n",
+        "    YEAR(`date`) AS `year`,\n",
+        "    SUM(`share_of_generation_pct`) AS `monthly_renewable_pct`\n",
+        "  FROM\n",
+        "    `energy_trans_dev`.`gold`.`gold_energy_generation_share`\n",
+        "  WHERE\n",
+        "    `energy_source` IN ('Bioenergy', 'Hydro', 'Other renewables', 'Solar', 'Wind')\n",
+        "  GROUP BY\n",
+        "    `country_name`,\n",
+        "    `country_code`,\n",
+        "    `date`,\n",
+        "    YEAR(`date`)\n",
+        "),\n",
+        "yearly_renewable AS (\n",
+        "  SELECT\n",
+        "    `country_name`,\n",
+        "    `country_code`,\n",
+        "    `year`,\n",
+        "    AVG(`monthly_renewable_pct`) AS `avg_renewable_pct`\n",
+        "  FROM\n",
+        "    monthly_renewable\n",
+        "  GROUP BY\n",
+        "    `country_name`,\n",
+        "    `country_code`,\n",
+        "    `year`\n",
+        "),\n",
+        "bounds AS (\n",
+        "  SELECT\n",
+        "    `country_name`,\n",
+        "    `country_code`,\n",
+        "    MIN(`year`) AS `first_year`,\n",
+        "    MAX(`year`) AS `last_year`\n",
+        "  FROM\n",
+        "    yearly_renewable\n",
+        "  GROUP BY\n",
+        "    `country_name`,\n",
+        "    `country_code`\n",
+        "),\n",
+        "transition AS (\n",
+        "  SELECT\n",
+        "    b.`country_name`,\n",
+        "    b.`country_code`,\n",
+        "    b.`first_year`,\n",
+        "    b.`last_year`,\n",
+        "    ROUND(fy.`avg_renewable_pct`, 2) AS `initial_renewable_pct`,\n",
+        "    ROUND(ly.`avg_renewable_pct`, 2) AS `latest_renewable_pct`,\n",
+        "    ROUND(ly.`avg_renewable_pct` - fy.`avg_renewable_pct`, 2) AS `renewable_share_change_pp`\n",
+        "  FROM\n",
+        "    bounds b\n",
+        "      JOIN yearly_renewable fy\n",
+        "        ON b.`country_name` = fy.`country_name`\n",
+        "        AND b.`country_code` = fy.`country_code`\n",
+        "        AND b.`first_year` = fy.`year`\n",
+        "      JOIN yearly_renewable ly\n",
+        "        ON b.`country_name` = ly.`country_name`\n",
+        "        AND b.`country_code` = ly.`country_code`\n",
+        "        AND b.`last_year` = ly.`year`\n",
+        ")\n",
+        "SELECT\n",
+        "  *\n",
+        "FROM\n",
+        "  transition\n",
+        "ORDER BY\n",
+        "  `renewable_share_change_pp` DESC\n",
+        "LIMIT 20"
+      ]
+    },
+    {
+      "displayName": "Coal Share by Country (Yearly)",
+      "name": "coal_yearly",
+      "parameters": [
+        {
+          "complexType": "MULTI",
+          "dataType": "STRING",
+          "defaultSelection": {
+            "values": {
+              "dataType": "STRING",
+              "values": [
+                {
+                  "value": "GRC"
+                },
+                {
+                  "value": "HKG"
+                },
+                {
+                  "value": "ISR"
+                },
+                {
+                  "value": "NLD"
+                },
+                {
+                  "value": "POL"
+                },
+                {
+                  "value": "PRT"
+                },
+                {
+                  "value": "MKD"
+                },
+                {
+                  "value": "REU"
+                },
+                {
+                  "value": "MNE"
+                },
+                {
+                  "value": "BGR"
+                },
+                {
+                  "value": "NER"
+                },
+                {
+                  "value": "GBR"
+                },
+                {
+                  "value": "CHL"
+                },
+                {
+                  "value": "DNK"
+                },
+                {
+                  "value": "DEU"
+                },
+                {
+                  "value": "AUS"
+                },
+                {
+                  "value": "USA"
+                },
+                {
+                  "value": "ESP"
+                },
+                {
+                  "value": "IRL"
+                },
+                {
+                  "value": "KAZ"
+                },
+                {
+                  "value": "BRN"
+                },
+                {
+                  "value": "PHL"
+                },
+                {
+                  "value": "BGD"
+                },
+                {
+                  "value": "DOM"
+                },
+                {
+                  "value": "MDG"
+                },
+                {
+                  "value": "VNM"
+                },
+                {
+                  "value": "RWA"
+                },
+                {
+                  "value": "PAK"
+                },
+                {
+                  "value": "KHM"
+                },
+                {
+                  "value": "ZMB"
+                },
+                {
+                  "value": "IDN"
+                },
+                {
+                  "value": "LAO"
+                },
+                {
+                  "value": "NCL"
+                },
+                {
+                  "value": "TUR"
+                },
+                {
+                  "value": "MAR"
+                },
+                {
+                  "value": "MMR"
+                },
+                {
+                  "value": "UZB"
+                },
+                {
+                  "value": "TJK"
+                }
+              ]
+            }
+          },
+          "displayName": "Countries",
+          "keyword": "countries"
+        },
+        {
+          "dataType": "INTEGER",
+          "defaultSelection": {
+            "values": {
+              "dataType": "INTEGER",
+              "values": [
+                {
+                  "value": "2024"
+                }
+              ]
+            }
+          },
+          "displayName": "Year",
+          "keyword": "year_filter"
+        }
+      ],
+      "queryLines": [
+        "SELECT\n",
+        "  country_code,\n",
+        "  year,\n",
+        "  share_of_generation_pct,\n",
+        "  coal_yoy_delta\n",
+        "FROM\n",
+        "  energy_trans_dev.gold.gold_coal_decline_rate\n",
+        "WHERE\n",
+        "  array_contains(:countries, country_code)\n",
+        "  AND share_of_generation_pct IS NOT NULL\n",
+        "  AND year = :year_filter"
+      ]
+    },
+    {
+      "displayName": "All Coal Countries",
+      "name": "coal_countries",
+      "queryLines": [
+        "SELECT DISTINCT\n",
+        "  country_code,\n",
+        "  year\n",
+        "FROM\n",
+        "  energy_trans_dev.gold.gold_coal_decline_rate\n",
+        "WHERE\n",
+        "  share_of_generation_pct IS NOT NULL\n",
+        "ORDER BY\n",
+        "  country_code,\n",
+        "  year"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "displayName": "Renewables by Country",
+      "layout": [
+        {
+          "position": {
+            "height": 13,
+            "width": 12,
+            "x": 0,
+            "y": 2
+          },
+          "widget": {
+            "name": "c9ddeab4",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "482f1056",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "MEASURE(`Renewables Total %`)",
+                      "name": "measure(Renewables Total %)"
+                    },
+                    {
+                      "expression": "`country_name`",
+                      "name": "country_name"
+                    },
+                    {
+                      "expression": "AVG(`Solar`)",
+                      "name": "avg(Solar)"
+                    },
+                    {
+                      "expression": "AVG(`Wind`)",
+                      "name": "avg(Wind)"
+                    },
+                    {
+                      "expression": "AVG(`Hydro`)",
+                      "name": "avg(Hydro)"
+                    },
+                    {
+                      "expression": "AVG(`Nuclear`)",
+                      "name": "avg(Nuclear)"
+                    },
+                    {
+                      "expression": "AVG(`Gas`)",
+                      "name": "avg(Gas)"
+                    },
+                    {
+                      "expression": "AVG(`Coal`)",
+                      "name": "avg(Coal)"
+                    },
+                    {
+                      "expression": "AVG(`Bioenergy`)",
+                      "name": "avg(Bioenergy)"
+                    },
+                    {
+                      "expression": "AVG(`Other renewables`)",
+                      "name": "avg(Other renewables)"
+                    },
+                    {
+                      "expression": "AVG(`Other fossil`)",
+                      "name": "avg(Other fossil)"
+                    },
+                    {
+                      "expression": "AVG(`Net imports`)",
+                      "name": "avg(Net imports)"
+                    },
+                    {
+                      "expression": "`country_code`",
+                      "name": "country_code"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "color": {
+                  "fieldName": "measure(Renewables Total %)",
+                  "scale": {
+                    "colorRamp": {
+                      "mode": "scheme",
+                      "scheme": "greens"
+                    },
+                    "type": "quantitative"
+                  }
+                },
+                "extra": [
+                  {
+                    "displayName": "Country",
+                    "fieldName": "country_name"
+                  },
+                  {
+                    "displayName": "Solar %",
+                    "fieldName": "avg(Solar)"
+                  },
+                  {
+                    "displayName": "Wind %",
+                    "fieldName": "avg(Wind)"
+                  },
+                  {
+                    "displayName": "Hydro %",
+                    "fieldName": "avg(Hydro)"
+                  },
+                  {
+                    "displayName": "Nuclear %",
+                    "fieldName": "avg(Nuclear)"
+                  },
+                  {
+                    "displayName": "Gas %",
+                    "fieldName": "avg(Gas)"
+                  },
+                  {
+                    "displayName": "Coal %",
+                    "fieldName": "avg(Coal)"
+                  },
+                  {
+                    "displayName": "Bioenergy %",
+                    "fieldName": "avg(Bioenergy)"
+                  },
+                  {
+                    "displayName": "Other Renewables %",
+                    "fieldName": "avg(Other renewables)"
+                  },
+                  {
+                    "displayName": "Other Fossil %",
+                    "fieldName": "avg(Other fossil)"
+                  },
+                  {
+                    "displayName": "Net Imports %",
+                    "fieldName": "avg(Net imports)"
+                  }
+                ],
+                "region": {
+                  "admin0": {
+                    "fieldName": "country_code",
+                    "geographicRole": "admin0-iso-3166-1-alpha-3",
+                    "type": "field"
+                  },
+                  "regionType": "mapbox-v4-admin"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Energy Generation Share by Source"
+              },
+              "version": 1,
+              "widgetType": "choropleth-map"
+            }
+          }
+        },
+        {
+          "position": {
+            "height": 2,
+            "width": 4,
+            "x": 0,
+            "y": 0
+          },
+          "widget": {
+            "name": "bf920daa",
+            "queries": [
+              {
+                "name": "dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e0c9ce610c4be2f34f8fe309b1e_date",
+                "query": {
+                  "datasetName": "482f1056",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "`date`",
+                      "name": "date"
+                    },
+                    {
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)",
+                      "name": "date_associativity"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "date",
+                    "queryName": "dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e0c9ce610c4be2f34f8fe309b1e_date"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true
+              },
+              "version": 2,
+              "widgetType": "filter-single-select"
+            }
+          }
+        }
+      ],
+      "layoutVersion": "GRID_V1",
+      "name": "c1f413c8",
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "displayName": "CO₂ Intensity Trends",
+      "layout": [
+        {
+          "position": {
+            "height": 10,
+            "width": 12,
+            "x": 0,
+            "y": 7
+          },
+          "widget": {
+            "name": "co2_bar_v2",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "fcb33aee",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "`country_name`",
+                      "name": "country_name"
+                    },
+                    {
+                      "expression": "SUM(`latest_co2_intensity_gco2_per_kwh`)",
+                      "name": "sum(latest_co2_intensity_gco2_per_kwh)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "color": {
+                  "displayName": "Country",
+                  "fieldName": "country_name",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": false
+                },
+                "x": {
+                  "displayName": "Country",
+                  "fieldName": "country_name",
+                  "scale": {
+                    "sort": {
+                      "by": "y-reversed"
+                    },
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "displayName": "Latest CO₂ Intensity",
+                  "fieldName": "sum(latest_co2_intensity_gco2_per_kwh)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top 20 Countries by CO₂ Intensity (gCO₂/kWh)"
+              },
+              "version": 3,
+              "widgetType": "bar"
+            }
+          }
+        },
+        {
+          "position": {
+            "height": 7,
+            "width": 12,
+            "x": 0,
+            "y": 0
+          },
+          "widget": {
+            "name": "global_co2_line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "global_avg_co2",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "`year`",
+                      "name": "year"
+                    },
+                    {
+                      "expression": "AVG(`co2_intensity_gco2_per_kwh`)",
+                      "name": "avg(co2_intensity_gco2_per_kwh)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "x": {
+                  "displayName": "Year",
+                  "fieldName": "year",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "displayName": "Avg CO₂ Intensity (gCO₂/kWh)",
+                  "fieldName": "avg(co2_intensity_gco2_per_kwh)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Global Average CO₂ Intensity Over Time"
+              },
+              "version": 3,
+              "widgetType": "line"
+            }
+          }
+        }
+      ],
+      "layoutVersion": "GRID_V1",
+      "name": "5eccf008",
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "displayName": "Coal Phase-Out",
+      "layout": [
+        {
+          "position": {
+            "height": 2,
+            "width": 6,
+            "x": 0,
+            "y": 0
+          },
+          "widget": {
+            "name": "country_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e1d77d61531928fd68fd6512ee1_country_code",
+                "query": {
+                  "datasetName": "coal_countries",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "`country_code`",
+                      "name": "country_code"
+                    },
+                    {
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)",
+                      "name": "country_code_associativity"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e1d75d218e19f5d1d57382167a5_countries",
+                "query": {
+                  "datasetName": "coal_yearly",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "keyword": "countries",
+                      "name": "countries"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "country_code",
+                    "queryName": "dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e1d77d61531928fd68fd6512ee1_country_code"
+                  },
+                  {
+                    "parameterName": "countries",
+                    "queryName": "parameter_dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e1d75d218e19f5d1d57382167a5_countries"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Country"
+              },
+              "version": 2,
+              "widgetType": "filter-multi-select"
+            }
+          }
+        },
+        {
+          "position": {
+            "height": 12,
+            "width": 12,
+            "x": 0,
+            "y": 2
+          },
+          "widget": {
+            "name": "coal_line",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "coal_yearly",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "`country_code`",
+                      "name": "country_code"
+                    },
+                    {
+                      "expression": "AVG(`coal_yoy_delta`)",
+                      "name": "avg(coal_yoy_delta)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "color": {
+                  "displayName": "Country",
+                  "fieldName": "country_code",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": true
+                },
+                "x": {
+                  "displayName": "Country",
+                  "fieldName": "country_code",
+                  "scale": {
+                    "sort": {
+                      "by": "y-reversed"
+                    },
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "displayName": "Coal Share (%)",
+                  "fieldName": "avg(coal_yoy_delta)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Coal Generation Share by Country (%)"
+              },
+              "version": 3,
+              "widgetType": "bar"
+            }
+          }
+        },
+        {
+          "position": {
+            "height": 2,
+            "width": 3,
+            "x": 6,
+            "y": 0
+          },
+          "widget": {
+            "name": "year_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e1d77d61531928fd68fd6512ee1_year",
+                "query": {
+                  "datasetName": "coal_countries",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "`year`",
+                      "name": "year"
+                    },
+                    {
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)",
+                      "name": "year_associativity"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "parameter_dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e1d75d218e19f5d1d57382167a5_year_filter",
+                "query": {
+                  "datasetName": "coal_yearly",
+                  "disaggregated": false,
+                  "parameters": [
+                    {
+                      "keyword": "year_filter",
+                      "name": "year_filter"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "year",
+                    "queryName": "dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e1d77d61531928fd68fd6512ee1_year"
+                  },
+                  {
+                    "parameterName": "year_filter",
+                    "queryName": "parameter_dashboards/01f12e0c974e1dfbbc3a340d017abae8/datasets/01f12e1d75d218e19f5d1d57382167a5_year_filter"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Year"
+              },
+              "version": 2,
+              "widgetType": "filter-single-select"
+            }
+          }
+        }
+      ],
+      "layoutVersion": "GRID_V1",
+      "name": "2c4b1cf1",
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "displayName": "Global Filters",
+      "layoutVersion": "GRID_V1",
+      "name": "c48ef1f3",
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS"
+    },
+    {
+      "displayName": "GDP & Renewables",
+      "layout": [
+        {
+          "position": {
+            "height": 7,
+            "width": 12,
+            "x": 0,
+            "y": 0
+          },
+          "widget": {
+            "name": "04ef813f",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "fc2d4794",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "`renewable_share_bucket`",
+                      "name": "renewable_share_bucket"
+                    },
+                    {
+                      "expression": "SUM(`avg_gdp_growth_pct`)",
+                      "name": "sum(avg_gdp_growth_pct)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "color": {
+                  "displayName": "Renewable Share Bucket",
+                  "fieldName": "renewable_share_bucket",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "mappings": [],
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": true
+                },
+                "x": {
+                  "displayName": "Renewable Share Bucket",
+                  "fieldName": "renewable_share_bucket",
+                  "scale": {
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "0-20%",
+                        "20-40%",
+                        "40-60%",
+                        "60-80%",
+                        "80-100%"
+                      ]
+                    },
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "displayName": "Avg GDP Growth (%)",
+                  "fieldName": "sum(avg_gdp_growth_pct)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 2,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Avg GDP Growth by Renewable Energy Share"
+              },
+              "version": 3,
+              "widgetType": "bar"
+            }
+          }
+        },
+        {
+          "position": {
+            "height": 8,
+            "width": 12,
+            "x": 0,
+            "y": 7
+          },
+          "widget": {
+            "name": "6b6aa81a",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "clean_energy_transition",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "expression": "`country_name`",
+                      "name": "country_name"
+                    },
+                    {
+                      "expression": "SUM(`renewable_share_change_pp`)",
+                      "name": "sum(renewable_share_change_pp)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "encodings": {
+                "color": {
+                  "displayName": "Country",
+                  "fieldName": "country_name",
+                  "legend": {
+                    "hide": true
+                  },
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": true
+                },
+                "x": {
+                  "displayName": "Country",
+                  "fieldName": "country_name",
+                  "scale": {
+                    "sort": {
+                      "by": "y-reversed"
+                    },
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "displayName": "Renewable Share Change (pp)",
+                  "fieldName": "sum(renewable_share_change_pp)",
+                  "format": {
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "places": 1,
+                      "type": "exact"
+                    },
+                    "type": "number-plain"
+                  },
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Top 20 Clean Energy Transition Leaders"
+              },
+              "version": 3,
+              "widgetType": "bar"
+            }
+          }
+        }
+      ],
+      "layoutVersion": "GRID_V1",
+      "name": "5d556ca7",
+      "pageType": "PAGE_TYPE_CANVAS"
+    }
+  ],
+  "uiSettings": {
+    "applyModeEnabled": false,
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    }
+  }
+}

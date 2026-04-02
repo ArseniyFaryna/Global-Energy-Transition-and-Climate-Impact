@@ -1,0 +1,6 @@
+resources:
+  dashboards:
+    global_energy_carbon_intensity_dashboard:
+      display_name: "Global Energy & Carbon Intensity Dashboard"
+      warehouse_id: a1f04664c7fcffa4
+      file_path: ../src/global_energy_carbon_intensity_dashboard.lvdash.json
